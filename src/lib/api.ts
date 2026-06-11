@@ -142,10 +142,10 @@ export type LogoutRequest = {
   deviceContext: { fingerprint: string; ip: string; userAgent: string };
   securePayload: string;
   /**
-   * Already-wrapped DPoP proof for the DpopLoginGuard.
-   * Must be of the form `DPoP <jwt>` (see `buildDpopLoginHeader`).
+   * Raw DPoP proof (no `DPoP ` prefix) for the DpopAuthGuard on logout.
+   * Must include `ath = base64url(sha256(phantomAccessToken))` in its claims.
    */
-  dpopLoginHeader: string;
+  dpopProofJwt: string;
   phantomAccessToken: string;
 };
 
@@ -157,10 +157,9 @@ export async function logout(req: LogoutRequest): Promise<AegisCallResult<null>>
       secure_payload: req.securePayload,
     },
     extraHeaders: {
-      // The public-logout handler calls `extractBearerTokenFromRequest`,
-      // so the Authorization scheme MUST be `Bearer`, not `DPoP`.
+      // DpopAuthGuard accepts Bearer or DPoP; extractBearerTokenFromRequest needs Bearer.
       Authorization: buildPhantomAuthHeader('Bearer', req.phantomAccessToken),
-      DPoP: req.dpopLoginHeader,
+      DPoP: req.dpopProofJwt,
     },
   });
 }

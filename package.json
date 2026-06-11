@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "node scripts/e2e-flow.mjs",
+    "e2e:full": "node scripts/e2e-full.mjs"
   },
   "dependencies": {
     "axios": "^1.16.1",

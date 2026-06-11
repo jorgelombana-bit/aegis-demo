@@ -56,6 +56,7 @@ export function LoginView({ defaultCountry, defaultChannelId, onResult, onLoadin
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            minLength={12}
           />
         </div>
       </div>

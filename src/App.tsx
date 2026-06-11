@@ -15,7 +15,7 @@ import './App.css';
 
 const DEFAULT_COUNTRY = (import.meta.env.VITE_DEFAULT_COUNTRY as string | undefined) ?? 'co';
 const DEFAULT_CHANNEL_ID =
-  (import.meta.env.VITE_DEFAULT_CHANNEL_ID as string | undefined) ?? 'a1b2c3d4-e5f6-4789-a012-000000000001';
+  (import.meta.env.VITE_DEFAULT_CHANNEL_ID as string | undefined) ?? 'c81f6463-45e8-4df5-a953-aba7d8ed6514';
 const aegisTarget =
   (import.meta.env.VITE_AEGIS_PROXY_TARGET as string | undefined) || 'https://aegis-dev.preprodcxr.co';
 

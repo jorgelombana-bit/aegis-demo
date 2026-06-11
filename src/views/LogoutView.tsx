@@ -62,8 +62,8 @@ export function LogoutView({ onResult, onLoadingChange, result }: Props) {
       </button>
       {!result && !loading && (
         <p className="muted">
-          Pipeline: <code>JWE envelope</code> + <code>Authorization: DPoP &lt;access&gt;</code> +{' '}
-          <code>DPoP proof (ath=sha256(access))</code> + <code>Rate limit</code>.
+          Pipeline: <code>JWE envelope</code> + <code>Authorization: Bearer &lt;access&gt;</code> +{' '}
+          <code>DPoP proof (with ath)</code> via <code>DpopAuthGuard</code> + <code>Rate limit</code>.
         </p>
       )}
     </form>

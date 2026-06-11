@@ -11,6 +11,7 @@ import {
 import { buildDpopProof, htuForAegis, type DpopKeyPair } from './dpop';
 import { encryptJwe } from './jwe';
 import {
+  clearPhantomTokens,
   fingerprintFromBrowser,
   getDpopKeyPair,
   getSession,
@@ -44,9 +45,8 @@ type BuildProofOptions = {
 };
 
 /**
- * DpopLoginGuard is in front of `/public/login` and `/public/logout`. The proof
- * must NOT include `ath` (the guard does not enforce it and the handler will
- * still compare the jkt against the session).
+ * DpopLoginGuard is in front of `/public/login` only. The proof must NOT
+ * include `ath`.
  */
 async function buildLoginProof(
   htm: 'POST',
@@ -109,6 +109,12 @@ async function buildAuthProof(
 export async function ensureSession(country: string, alg: DpopAlg): Promise<void> {
   if (!getSession()) {
     await initSession(country, alg);
+    return;
+  }
+  // Login always rotates the DPoP key pair (see LoginView). Re-init if the pair
+  // was never stored (older sessions) or the algorithm changed.
+  if (!getDpopKeyPair() || getSession()?.dpopAlg !== alg) {
+    await rotateDpopKeyPair(alg);
   }
 }
 
@@ -182,6 +188,8 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
   const log: ActionLog = [];
   try {
     await ensureSession(input.country, input.alg);
+    // Fresh DPoP key per login attempt (binds a new jkt to the phantom session).
+    await rotateDpopKeyPair(input.alg);
     const ctx = fingerprintFromBrowser();
 
     const { jti, iat } = newAntiReplayJti();
@@ -238,7 +246,7 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
 }
 
 // =============================================================================
-// 3. Logout (DpopLoginGuard + Bearer Authorization)
+// 3. Logout (DpopAuthGuard + Bearer Authorization + ath in DPoP proof)
 // =============================================================================
 export type LogoutInput = {
   proofOptions?: BuildProofOptions;
@@ -267,13 +275,15 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
     const securePayload = await encryptJwe(session.country, securePlaintext);
     log.push(`secure_payload (JWE, first 40 chars) = ${securePayload.slice(0, 40)}...`);
 
-    const { header, jkt } = await buildLoginProof(
+    const { header, jkt } = await buildAuthProof(
       'POST',
       `/api/v1/${session.country}/public/logout`,
+      session.accessToken,
       input.proofOptions
     );
     log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt})`);
-    log.push(`Authorization header = "Bearer <phantomAccessToken>" (NOT DPoP — see handler.extractBearerTokenFromRequest)`);
+    log.push(`DPoP proof includes ath = base64url(sha256(phantomAccessToken))`);
+    log.push(`Authorization header = "Bearer <phantomAccessToken>" (DpopAuthGuard accepts Bearer; extractBearerTokenFromRequest requires it)`);
 
     const res = await logout({
       country: session.country,
@@ -282,14 +292,28 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
       phantomRefreshToken: session.refreshToken,
       deviceContext: ctx,
       securePayload,
-      dpopLoginHeader: header,
+      dpopProofJwt: header,
       phantomAccessToken: session.accessToken,
     });
 
     log.push(`POST /api/v1/${session.country}/public/logout -> HTTP ${res.status}`);
 
     if (res.ok) {
-      log.push('Phantom session revoked in Redis (Keycloak refresh token revoked).');
+      const revokedAccess = session.accessToken;
+      clearPhantomTokens();
+      log.push('Local phantom tokens cleared from demo session.');
+
+      const intro = await introspect(revokedAccess);
+      if (intro.ok && intro.data && typeof intro.data === 'object' && 'active' in intro.data) {
+        const active = (intro.data as IntrospectTokenResponse).active;
+        log.push(`Post-logout introspect: active=${active}`);
+        if (active) {
+          log.push(
+            'Note: aegis-core returns HTTP 204 on logout but may keep the phantom Redis session until TTL; introspect can still show active:true.'
+          );
+        }
+      }
+
       return { ok: true, data: null, log, httpStatus: res.status };
     }
     return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };

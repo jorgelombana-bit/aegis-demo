@@ -58,8 +58,11 @@ export function CreateUserView({ defaultCountry, defaultChannelId, onResult, onL
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={10}
+          minLength={12}
         />
+        <small className="muted">
+          Channel policy (CHANNEL-MAY-29): min 12 chars, uppercase, symbol, must not contain username.
+        </small>
       </div>
       <button type="submit" disabled={loading} className="btn-primary">
         {loading ? 'Registering...' : 'Create User'}

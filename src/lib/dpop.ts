@@ -1,4 +1,4 @@
-import { calculateJwkThumbprint, importJWK, SignJWT, type JWK } from 'jose';
+import { calculateJwkThumbprint, SignJWT, type JWK } from 'jose';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { DpopAlg } from './types';
@@ -116,9 +116,7 @@ export async function buildDpopProof(input: BuildDpopProofInput): Promise<string
     jwk: input.keyPair.publicJwk,
   } as Parameters<typeof builder.setProtectedHeader>[0]);
 
-  // Re-key key by alg: importJWK gives us a KeyLike usable for signing.
-  const signingKey = await importJWK(input.keyPair.publicJwk as JWK, input.keyPair.alg);
-  return await builder.sign(signingKey);
+  return await builder.sign(input.keyPair.privateKey);
 }
 
 export function htuForAegis(

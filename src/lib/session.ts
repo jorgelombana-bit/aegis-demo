@@ -36,6 +36,7 @@ export async function initSession(country: string, alg: DpopAlg): Promise<void> 
   state = {
     country,
     dpopAlg: alg,
+    dpopKeyPair,
     dpopPublicJwk: { ...dpopKeyPair.publicJwk },
     dpopJkt: dpopKeyPair.jkt,
   };
