@@ -42,6 +42,7 @@ export function LoginView({ defaultCountry, defaultChannelId, onResult, onLoadin
         <div className="field">
           <label>Channel clientId (UUID)</label>
           <input value={clientId} onChange={(e) => setClientId(e.target.value)} required />
+          <small className="muted">data.id del canal en aegis-admin; editable.</small>
         </div>
       </div>
       <div className="field-row">
@@ -56,7 +57,6 @@ export function LoginView({ defaultCountry, defaultChannelId, onResult, onLoadin
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={12}
           />
         </div>
       </div>

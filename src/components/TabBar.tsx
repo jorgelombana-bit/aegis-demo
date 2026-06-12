@@ -1,15 +1,13 @@
-export type TabKey = 'createUser' | 'login' | 'logout' | 'introspect' | 'me' | 'refresh' | 'security';
+export type TabKey = 'createUser' | 'login' | 'logout' | 'introspect' | 'security';
 
 type Tab = { key: TabKey; label: string; description: string };
 
 const TABS: Tab[] = [
-  { key: 'createUser', label: '1. Create User', description: 'Self-service registration (JWE + Rate Limit)' },
-  { key: 'login', label: '2. Login', description: 'Phantom Token + DPoP + Rate Limit' },
-  { key: 'logout', label: '3. Logout', description: 'Revoke phantom session (Bearer + DPoP)' },
+  { key: 'createUser', label: '1. Create User', description: 'Registro público (JWE)' },
+  { key: 'login', label: '2. Login', description: 'Phantom Token + DPoP' },
+  { key: 'logout', label: '3. Logout', description: 'Phantom Token + DPoP' },
   { key: 'introspect', label: '4. Introspect', description: 'Internal API Guard' },
-  { key: 'me', label: '5. /users/me', description: 'Validate Phantom ↔ DPoP link' },
-  { key: 'refresh', label: '6. Refresh', description: 'Rotate phantom tokens (JSON body)' },
-  { key: 'security', label: '7. Security Test', description: 'Failure scenarios' },
+  { key: 'security', label: '5. Security Test', description: 'Casos DPoP + Modo Test' },
 ];
 
 type Props = {

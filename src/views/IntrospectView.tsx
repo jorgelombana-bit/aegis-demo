@@ -43,8 +43,8 @@ export function IntrospectView({ onResult, onLoadingChange, result }: Props) {
       </button>
       {!result && !loading && (
         <p className="muted">
-          Pipeline: <code>X-Internal-API-Key</code> (injected by Vite proxy) +{' '}
-          <code>InternalApiAuthGuard</code>. Body: <code>{'{ token: <UUID> }'}</code>.
+          <code>InternalApiAuthGuard</code> vía proxy. Compara <code>dpop_jkt</code> de la respuesta con el{' '}
+          <code>jkt</code> de la sesión (vínculo Phantom↔DPoP).
         </p>
       )}
     </form>

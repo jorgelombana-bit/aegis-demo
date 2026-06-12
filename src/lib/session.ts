@@ -5,6 +5,8 @@ import type { DemoSessionState, DpopAlg } from './types';
 
 type SessionInternal = DemoSessionState & {
   dpopKeyPair?: DpopKeyPair;
+  /** In-memory only — used by Security Test "Login válido" to replay credentials. */
+  password?: string;
 };
 
 let state: SessionInternal | null = null;
@@ -22,9 +24,14 @@ export function subscribe(listener: () => void): () => void {
 
 export function getSession(): DemoSessionState | null {
   if (!state) return null;
-  // Strip the private key from the public projection.
-  const { dpopKeyPair: _dpopKeyPair, ...publicState } = state;
+  // Strip secrets from the public projection.
+  const { dpopKeyPair: _dpopKeyPair, password: _password, ...publicState } = state;
   return publicState;
+}
+
+/** Returns the password cached at last successful login (Security Test replay only). */
+export function getStoredPassword(): string | undefined {
+  return state?.password;
 }
 
 export function getDpopKeyPair(): DpopKeyPair | null {
@@ -59,9 +66,9 @@ export function rotateDpopKeyPair(alg: DpopAlg): Promise<void> {
   });
 }
 
-export function setCredentials(username: string, channelId: string): void {
+export function setCredentials(username: string, channelId: string, password?: string): void {
   if (!state) return;
-  state = { ...state, username, channelId };
+  state = { ...state, username, channelId, ...(password !== undefined ? { password } : {}) };
   notify();
 }
 

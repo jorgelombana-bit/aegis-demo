@@ -58,7 +58,7 @@ code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, mo
 /* ============== Tab bar ============== */
 .tab-bar {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin: 24px 0 16px;
 }
@@ -295,7 +295,20 @@ code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, mo
 .badge.fail  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 .badge.loading { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
 
-/* ============== Security grid ============== */
+/* ============== Security test ============== */
+.security-test {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.security-section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
 .security-grid {
   display: flex;
   flex-direction: column;

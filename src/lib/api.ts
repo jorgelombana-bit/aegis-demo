@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 import type {
   AegisErrorEnvelope,
@@ -8,11 +8,11 @@ import type {
   PhantomUserMeResponse,
   PublicHumanLoginResponse,
   PublicHumanRegisterResponse,
-} from './types';
+} from "./types";
 
 const apiClient = axios.create({
-  baseURL: '',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: "",
+  headers: { "Content-Type": "application/json" },
   // We want full responses even on 4xx/5xx so the UI can render the error envelope.
   validateStatus: () => true,
 });
@@ -24,26 +24,46 @@ export type AegisCallResult<T> = {
   raw: unknown;
 };
 
-export type AuthorizationScheme = 'DPoP' | 'Bearer';
+export type AuthorizationScheme = "DPoP" | "Bearer";
 
 async function call<T>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
-  options: { body?: unknown; extraHeaders?: Record<string, string> } = {}
+  options: { body?: unknown; extraHeaders?: Record<string, string> } = {},
 ): Promise<AegisCallResult<T>> {
-  const response = await apiClient.request<AegisStandardEnvelope<T> | AegisErrorEnvelope>({
+  console.log({
     method,
     url: path,
     data: options.body,
     headers: options.extraHeaders,
-    transformResponse: [(raw) => {
-      if (typeof raw !== 'string') return raw;
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return raw;
-      }
-    }],
+    transformResponse: [
+      (raw: string) => {
+        if (typeof raw !== "string") return raw;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return raw;
+        }
+      },
+    ],
+  });
+  const response = await apiClient.request<
+    AegisStandardEnvelope<T> | AegisErrorEnvelope
+  >({
+    method,
+    url: path,
+    data: options.body,
+    headers: options.extraHeaders,
+    transformResponse: [
+      (raw: string) => {
+        if (typeof raw !== "string") return raw;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return raw;
+        }
+      },
+    ],
   });
 
   return {
@@ -55,7 +75,10 @@ async function call<T>(
 }
 
 export async function getEncryptionKey(): Promise<EncryptionKeyJwk> {
-  const result = await call<AegisStandardEnvelope<EncryptionKeyJwk>>('GET', '/api/v1/auth/encryption-key');
+  const result = await call<AegisStandardEnvelope<EncryptionKeyJwk>>(
+    "GET",
+    "/api/v1/auth/encryption-key",
+  );
   if (!result.ok) {
     throw new Error(`encryption-key failed: HTTP ${result.status}`);
   }
@@ -81,7 +104,10 @@ export function buildDpopAuthHeader(proofJwt: string): string {
   return proofJwt;
 }
 
-export function buildPhantomAuthHeader(scheme: AuthorizationScheme, phantomAccess: string): string {
+export function buildPhantomAuthHeader(
+  scheme: AuthorizationScheme,
+  phantomAccess: string,
+): string {
   return `${scheme} ${phantomAccess}`;
 }
 
@@ -99,14 +125,20 @@ export type CreateUserRequest = {
   securePayload: string;
 };
 
-export async function createUser(req: CreateUserRequest): Promise<AegisCallResult<PublicHumanRegisterResponse>> {
-  return call<PublicHumanRegisterResponse>('POST', `/api/v1/${req.country}/public/user`, {
-    body: {
-      user_identifier: req.email,
-      device_context: req.deviceContext,
-      secure_payload: req.securePayload,
+export async function createUser(
+  req: CreateUserRequest,
+): Promise<AegisCallResult<PublicHumanRegisterResponse>> {
+  return call<PublicHumanRegisterResponse>(
+    "POST",
+    `/api/v1/${req.country}/public/user`,
+    {
+      body: {
+        user_identifier: req.email,
+        device_context: req.deviceContext,
+        secure_payload: req.securePayload,
+      },
     },
-  });
+  );
 }
 
 export type LoginRequest = {
@@ -123,15 +155,21 @@ export type LoginRequest = {
   dpopLoginHeader: string;
 };
 
-export async function login(req: LoginRequest): Promise<AegisCallResult<PublicHumanLoginResponse>> {
-  return call<PublicHumanLoginResponse>('POST', `/api/v1/${req.country}/public/login`, {
-    body: {
-      user_identifier: req.username,
-      device_context: req.deviceContext,
-      secure_payload: req.securePayload,
+export async function login(
+  req: LoginRequest,
+): Promise<AegisCallResult<PublicHumanLoginResponse>> {
+  return call<PublicHumanLoginResponse>(
+    "POST",
+    `/api/v1/${req.country}/public/login`,
+    {
+      body: {
+        user_identifier: req.username,
+        device_context: req.deviceContext,
+        secure_payload: req.securePayload,
+      },
+      extraHeaders: { DPoP: req.dpopLoginHeader },
     },
-    extraHeaders: { DPoP: req.dpopLoginHeader },
-  });
+  );
 }
 
 export type LogoutRequest = {
@@ -149,8 +187,10 @@ export type LogoutRequest = {
   phantomAccessToken: string;
 };
 
-export async function logout(req: LogoutRequest): Promise<AegisCallResult<null>> {
-  return call<null>('POST', `/api/v1/${req.country}/public/logout`, {
+export async function logout(
+  req: LogoutRequest,
+): Promise<AegisCallResult<null>> {
+  return call<null>("POST", `/api/v1/${req.country}/public/logout`, {
     body: {
       user_identifier: req.username,
       device_context: req.deviceContext,
@@ -158,7 +198,7 @@ export async function logout(req: LogoutRequest): Promise<AegisCallResult<null>>
     },
     extraHeaders: {
       // DpopAuthGuard accepts Bearer or DPoP; extractBearerTokenFromRequest needs Bearer.
-      Authorization: buildPhantomAuthHeader('Bearer', req.phantomAccessToken),
+      Authorization: buildPhantomAuthHeader("Bearer", req.phantomAccessToken),
       DPoP: req.dpopProofJwt,
     },
   });
@@ -166,11 +206,11 @@ export async function logout(req: LogoutRequest): Promise<AegisCallResult<null>>
 
 export async function introspect(
   token: string,
-  callerService = 'aegis-demo-ui'
+  callerService = "aegis-demo-ui",
 ): Promise<AegisCallResult<IntrospectTokenResponse>> {
-  return call<IntrospectTokenResponse>('POST', `/internal/token/introspect`, {
+  return call<IntrospectTokenResponse>("POST", `/internal/token/introspect`, {
     body: { token },
-    extraHeaders: { 'X-Caller-Service': callerService },
+    extraHeaders: { "X-Caller-Service": callerService },
   });
 }
 
@@ -183,39 +223,19 @@ export type GetMeRequest = {
   dpopProofJwt: string;
 };
 
-export async function getMe(req: GetMeRequest): Promise<AegisCallResult<AegisStandardEnvelope<PhantomUserMeResponse>>> {
-  return call<AegisStandardEnvelope<PhantomUserMeResponse>>('GET', `/api/v1/users/me`, {
-    extraHeaders: {
-      Authorization: buildPhantomAuthHeader('DPoP', req.phantomAccessToken),
-      DPoP: req.dpopProofJwt,
+export async function getMe(
+  req: GetMeRequest,
+): Promise<AegisCallResult<AegisStandardEnvelope<PhantomUserMeResponse>>> {
+  return call<AegisStandardEnvelope<PhantomUserMeResponse>>(
+    "GET",
+    `/api/v1/users/me`,
+    {
+      extraHeaders: {
+        Authorization: buildPhantomAuthHeader("DPoP", req.phantomAccessToken),
+        DPoP: req.dpopProofJwt,
+      },
     },
-  });
-}
-
-export type RefreshRequest = {
-  refreshToken: string;
-  clientId: string;
-  phantomAccessToken: string;
-  /**
-   * Raw DPoP proof (no `DPoP ` prefix) for the DpopAuthGuard.
-   * Must include `ath = base64url(sha256(phantomAccessToken))` in its claims.
-   */
-  dpopProofJwt: string;
-};
-
-export async function refresh(
-  req: RefreshRequest
-): Promise<AegisCallResult<PublicHumanLoginResponse>> {
-  return call<PublicHumanLoginResponse>('POST', `/api/v1/auth/refresh-token`, {
-    body: {
-      refresh_token: req.refreshToken,
-      client_id: req.clientId,
-    },
-    extraHeaders: {
-      Authorization: buildPhantomAuthHeader('DPoP', req.phantomAccessToken),
-      DPoP: req.dpopProofJwt,
-    },
-  });
+  );
 }
 
 export { call as rawCall };

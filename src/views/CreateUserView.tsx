@@ -39,6 +39,7 @@ export function CreateUserView({ defaultCountry, defaultChannelId, onResult, onL
         <div className="field">
           <label>Channel clientId (UUID)</label>
           <input value={clientId} onChange={(e) => setClientId(e.target.value)} required />
+          <small className="muted">data.id del canal en aegis-admin; editable.</small>
         </div>
       </div>
       <div className="field-row">
@@ -58,10 +59,9 @@ export function CreateUserView({ defaultCountry, defaultChannelId, onResult, onL
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={12}
         />
         <small className="muted">
-          Channel policy (CHANNEL-MAY-29): min 12 chars, uppercase, symbol, must not contain username.
+          Password must satisfy the policy configured for the selected channel in aegis-admin.
         </small>
       </div>
       <button type="submit" disabled={loading} className="btn-primary">

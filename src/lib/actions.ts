@@ -6,7 +6,6 @@ import {
   introspect,
   login,
   logout,
-  refresh,
 } from './api';
 import { buildDpopProof, htuForAegis, type DpopKeyPair } from './dpop';
 import { encryptJwe } from './jwe';
@@ -232,7 +231,7 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
 
     if (res.ok) {
       const data = res.data as PublicHumanLoginResponse;
-      setCredentials(input.username, input.clientId);
+      setCredentials(input.username, input.clientId, input.password);
       setPhantomTokens(data.access_token, data.refresh_token, data.expires_in);
       log.push(`phantom access_token  = ${data.access_token}`);
       log.push(`phantom refresh_token = ${data.refresh_token}`);
@@ -250,6 +249,8 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
 // =============================================================================
 export type LogoutInput = {
   proofOptions?: BuildProofOptions;
+  /** Caso 5 / Modo Test: no borrar tokens locales (aegis devuelve 204 aunque el guard falle). */
+  preserveLocalSession?: boolean;
 };
 
 export async function actionLogout(input: LogoutInput = {}): Promise<ActionResult<null>> {
@@ -299,21 +300,11 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
     log.push(`POST /api/v1/${session.country}/public/logout -> HTTP ${res.status}`);
 
     if (res.ok) {
-      const revokedAccess = session.accessToken;
-      clearPhantomTokens();
-      log.push('Local phantom tokens cleared from demo session.');
-
-      const intro = await introspect(revokedAccess);
-      if (intro.ok && intro.data && typeof intro.data === 'object' && 'active' in intro.data) {
-        const active = (intro.data as IntrospectTokenResponse).active;
-        log.push(`Post-logout introspect: active=${active}`);
-        if (active) {
-          log.push(
-            'Note: aegis-core returns HTTP 204 on logout but may keep the phantom Redis session until TTL; introspect can still show active:true.'
-          );
-        }
+      if (!input.preserveLocalSession) {
+        clearPhantomTokens();
+      } else {
+        log.push('Sesión local preservada (logout de prueba; aegis puede responder 204 sin revocar).');
       }
-
       return { ok: true, data: null, log, httpStatus: res.status };
     }
     return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
@@ -338,7 +329,21 @@ export async function actionIntrospect(input: IntrospectInput): Promise<ActionRe
     const res = await introspect(input.token);
     log.push(`HTTP ${res.status}`);
     if (res.ok) {
-      return { ok: true, data: res.data as IntrospectTokenResponse, log, httpStatus: res.status };
+      const data = unwrapIntrospectPayload(res.data);
+      if (!data) {
+        return { ok: false, error: 'Unexpected introspect response shape', data: res.data as never, log, httpStatus: res.status };
+      }
+      log.push(`active=${String(data.active)}`);
+      const session = getSession();
+      if (session?.dpopJkt && data.active && data.dpop_jkt) {
+        const match = data.dpop_jkt === session.dpopJkt;
+        log.push(
+          match
+            ? `Phantom↔DPoP: OK (introspect dpop_jkt = session jkt = ${session.dpopJkt})`
+            : `Phantom↔DPoP: MISMATCH (introspect=${data.dpop_jkt}, session=${session.dpopJkt})`
+        );
+      }
+      return { ok: true, data, log, httpStatus: res.status };
     }
     return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
   } catch (err) {
@@ -384,57 +389,6 @@ export async function actionGetMe(input: GetMeInput = {}): Promise<ActionResult<
 }
 
 // =============================================================================
-// 6. Refresh (DpopAuthGuard + JSON body)
-// =============================================================================
-export type RefreshInput = {
-  proofOptions?: BuildProofOptions;
-};
-
-export async function actionRefresh(input: RefreshInput = {}): Promise<ActionResult<PublicHumanLoginResponse>> {
-  const log: ActionLog = [];
-  try {
-    const session = getSession();
-    if (!session) throw new Error('No active session. Login first.');
-    if (!session.accessToken || !session.refreshToken || !session.channelId) {
-      throw new Error('Incomplete session. Login first.');
-    }
-
-    const { header, jkt } = await buildAuthProof(
-      'POST',
-      `/api/v1/auth/refresh-token`,
-      session.accessToken,
-      input.proofOptions
-    );
-    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt}, with ath)`);
-
-    const res = await refresh({
-      refreshToken: session.refreshToken,
-      clientId: session.channelId,
-      phantomAccessToken: session.accessToken,
-      dpopProofJwt: header,
-    });
-    log.push(`POST /api/v1/auth/refresh-token -> HTTP ${res.status}`);
-
-    if (res.ok) {
-      const data = res.data as PublicHumanLoginResponse;
-      // The DPoP key pair is NOT rotated; only tokens are. The jkt is preserved.
-      setPhantomTokens(data.access_token, data.refresh_token, data.expires_in);
-      log.push(`rotated phantom access_token  = ${data.access_token}`);
-      log.push(`rotated phantom refresh_token = ${data.refresh_token}`);
-      log.push(`expires_in                    = ${data.expires_in}s`);
-      return { ok: true, data, log, httpStatus: res.status };
-    }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err), data: undefined, log };
-  }
-}
-
-export async function actionRotateKey(alg: DpopAlg): Promise<void> {
-  await rotateDpopKeyPair(alg);
-}
-
-// =============================================================================
 // helpers
 // =============================================================================
 function describeError(payload: unknown, status: number): string {
@@ -463,6 +417,17 @@ function describeError(payload: unknown, status: number): string {
     }
   }
   return `HTTP ${status}`;
+}
+
+function unwrapIntrospectPayload(payload: unknown): IntrospectTokenResponse | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const row = payload as Record<string, unknown>;
+  if (typeof row.active === 'boolean') return row as IntrospectTokenResponse;
+  const nested = row.data;
+  if (nested && typeof nested === 'object' && typeof (nested as IntrospectTokenResponse).active === 'boolean') {
+    return nested as IntrospectTokenResponse;
+  }
+  return null;
 }
 
 function errorMessage(err: unknown): string {
