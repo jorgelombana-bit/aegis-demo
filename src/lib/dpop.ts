@@ -81,7 +81,20 @@ export type BuildDpopProofInput = {
   tamper?: (unsigned: { header: Record<string, unknown>; payload: Record<string, unknown> }) => void;
 };
 
-export async function buildDpopProof(input: BuildDpopProofInput): Promise<string> {
+export type BuiltDpopProof = {
+  /** Raw compact JWT string (header.payload.signature, base64url). */
+  proofJwt: string;
+  /** Decoded header (for display in the response panel). */
+  header: Record<string, unknown>;
+  /** Decoded payload (for display). */
+  payload: Record<string, unknown>;
+  iat: number;
+  jti: string;
+  /** jkt = base64url(sha256(canonical publicJwk)) — used by aegis-core to bind the proof to the session. */
+  jkt: string;
+};
+
+export async function buildDpopProof(input: BuildDpopProofInput): Promise<BuiltDpopProof> {
   const iat = input.iat ?? Math.floor(Date.now() / 1000);
   const jti = input.jti ?? uuidv4();
 
@@ -116,7 +129,19 @@ export async function buildDpopProof(input: BuildDpopProofInput): Promise<string
     jwk: input.keyPair.publicJwk,
   } as Parameters<typeof builder.setProtectedHeader>[0]);
 
-  return await builder.sign(input.keyPair.privateKey);
+  const proofJwt = await builder.sign(input.keyPair.privateKey);
+  return { proofJwt, header, payload, iat, jti, jkt: input.keyPair.jkt };
+}
+
+/** Decode a base64url-encoded segment of a JWT into the parsed JSON object. */
+export function decodeJwtSegment(seg: string): Record<string, unknown> {
+  try {
+    const padded = seg.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice(0, (4 - (seg.length % 4)) % 4);
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
 }
 
 export function htuForAegis(

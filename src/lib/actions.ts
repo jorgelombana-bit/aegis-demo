@@ -7,7 +7,7 @@ import {
   login,
   logout,
 } from './api';
-import { buildDpopProof, htuForAegis, type DpopKeyPair } from './dpop';
+import { buildDpopProof, htuForAegis, type BuiltDpopProof, type DpopKeyPair } from './dpop';
 import { encryptJwe } from './jwe';
 import {
   clearPhantomTokens,
@@ -24,6 +24,33 @@ import type { DpopAlg, IntrospectTokenResponse, PhantomUserMeResponse, PublicHum
 
 export type ActionLog = string[];
 
+/**
+ * The EXACT HTTP request that was sent to aegis-core. Captured by every action
+ * so the ResponsePanel can render it with all the real values (DPoP JWT,
+ * JWE compact, headers, body) and the user can verify 100% what went on the wire.
+ */
+export type ExecutedRequest = {
+  method: string;
+  /** Full URL the request was sent to. For proxied endpoints this is the proxied target. */
+  url: string;
+  /** Final headers as they were sent (including DPoP, Authorization, etc.). */
+  headers: Record<string, string>;
+  /** Raw DPoP compact JWT (header.payload.signature), if a DPoP proof was sent. */
+  dpopProofJwt?: string;
+  /** Decoded DPoP header (for display). */
+  dpopHeader?: Record<string, unknown>;
+  /** Decoded DPoP payload (for display). */
+  dpopPayload?: Record<string, unknown>;
+  /** Compact JWE string (header.encrypted_key.iv.ciphertext.tag), if a JWE body was sent. */
+  jweCompact?: string;
+  /** Plaintext that the JWE encrypts (for display — shows exactly what aegis-core will see). */
+  jwePlaintext?: Record<string, unknown>;
+  /** Plain JSON body sent on the wire (for endpoints without JWE, e.g. logout, introspect, refresh). */
+  rawBody?: Record<string, unknown>;
+  /** Same as `rawBody` but as a string (preserves key order and exact formatting). */
+  rawBodyBytes?: string;
+};
+
 export type ActionResult<T = unknown> = {
   ok: boolean;
   data?: T;
@@ -34,9 +61,11 @@ export type ActionResult<T = unknown> = {
   error?: string;
   log: ActionLog;
   httpStatus?: number;
+  /** The actual HTTP request that was sent. Populated by every action. */
+  executedRequest?: ExecutedRequest;
 };
 
-export type { DpopKeyPair } from './dpop';
+export type { DpopKeyPair, BuiltDpopProof };
 
 type BuildProofOptions = {
   tamper?: (unsigned: { header: Record<string, unknown>; payload: Record<string, unknown> }) => void;
@@ -51,12 +80,12 @@ async function buildLoginProof(
   htm: 'POST',
   htuPath: string,
   opts: BuildProofOptions = {}
-): Promise<{ proofJwt: string; header: string; jti: string; iat: number; jkt: string }> {
+): Promise<BuiltDpopProof & { wireHeader: string }> {
   const keyPair = opts.overrideKeyPair ?? getDpopKeyPair();
   if (!keyPair) throw new Error('No DPoP key pair. Run Create User or Login first to initialize one.');
 
   const { jti, iat } = newAntiReplayJti();
-  const proofJwt = await buildDpopProof({
+  const built = await buildDpopProof({
     keyPair,
     htm,
     htu: htuForAegis(htuPath),
@@ -64,13 +93,7 @@ async function buildLoginProof(
     iat,
     tamper: opts.tamper,
   });
-  return {
-    proofJwt,
-    header: buildDpopLoginHeader(proofJwt),
-    jti,
-    iat,
-    jkt: keyPair.jkt,
-  };
+  return { ...built, wireHeader: buildDpopLoginHeader(built.proofJwt) };
 }
 
 /**
@@ -82,12 +105,12 @@ async function buildAuthProof(
   htuPath: string,
   phantomAccessToken: string,
   opts: BuildProofOptions = {}
-): Promise<{ proofJwt: string; header: string; jti: string; iat: number; jkt: string }> {
+): Promise<BuiltDpopProof & { wireHeader: string }> {
   const keyPair = opts.overrideKeyPair ?? getDpopKeyPair();
   if (!keyPair) throw new Error('No DPoP key pair. Run Create User or Login first to initialize one.');
 
   const { jti, iat } = newAntiReplayJti();
-  const proofJwt = await buildDpopProof({
+  const built = await buildDpopProof({
     keyPair,
     htm,
     htu: htuForAegis(htuPath),
@@ -96,13 +119,7 @@ async function buildAuthProof(
     iat,
     tamper: opts.tamper,
   });
-  return {
-    proofJwt,
-    header: buildDpopAuthHeader(proofJwt),
-    jti,
-    iat,
-    jkt: keyPair.jkt,
-  };
+  return { ...built, wireHeader: buildDpopAuthHeader(built.proofJwt) };
 }
 
 export async function ensureSession(country: string, alg: DpopAlg): Promise<void> {
@@ -151,6 +168,33 @@ export async function actionCreateUser(input: CreateUserInput): Promise<ActionRe
     const securePayload = await encryptJwe(input.country, securePlaintext);
     log.push(`secure_payload (JWE, first 40 chars) = ${securePayload.slice(0, 40)}...`);
 
+    const executedRequest: ExecutedRequest = {
+      method: 'POST',
+      url: htuForAegis(`/api/v1/${input.country}/public/user`),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      jweCompact: securePayload,
+      jwePlaintext: {
+        ...securePlaintext,
+        userData: { ...securePlaintext.userData, password: '***' },
+      },
+      rawBody: {
+        user_identifier: input.email,
+        device_context: ctx,
+        secure_payload: securePayload,
+      },
+      rawBodyBytes: JSON.stringify(
+        {
+          user_identifier: input.email,
+          device_context: ctx,
+          secure_payload: securePayload,
+        },
+        null,
+        2,
+      ),
+    };
+
     const res = await createUser({
       country: input.country,
       clientId: input.clientId,
@@ -163,9 +207,9 @@ export async function actionCreateUser(input: CreateUserInput): Promise<ActionRe
 
     log.push(`POST /api/v1/${input.country}/public/user -> HTTP ${res.status}`);
     if (res.ok) {
-      return { ok: true, data: res.data, log, httpStatus: res.status };
+      return { ok: true, data: res.data, log, httpStatus: res.status, executedRequest };
     }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
+    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status, executedRequest };
   } catch (err) {
     return { ok: false, error: errorMessage(err), data: undefined, log };
   }
@@ -209,13 +253,44 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
     const securePayload = await encryptJwe(input.country, securePlaintext);
     log.push(`secure_payload (JWE, first 40 chars) = ${securePayload.slice(0, 40)}...`);
 
-    const { header, jkt } = await buildLoginProof(
+    const built = await buildLoginProof(
       'POST',
       `/api/v1/${input.country}/public/login`,
       input.proofOptions
     );
-    log.push(`DPoP proof built (alg=${input.proofOptions?.overrideKeyPair?.alg ?? input.alg}, jkt=${jkt})`);
+    log.push(`DPoP proof built (alg=${input.proofOptions?.overrideKeyPair?.alg ?? input.alg}, jkt=${built.jkt})`);
     log.push(`DPoP header value = "DPoP <jwt>" (DpopLoginGuard expects prefix)`);
+
+    const executedRequest: ExecutedRequest = {
+      method: 'POST',
+      url: htuForAegis(`/api/v1/${input.country}/public/login`),
+      headers: {
+        'Content-Type': 'application/json',
+        DPoP: built.wireHeader,
+      },
+      dpopProofJwt: built.proofJwt,
+      dpopHeader: built.header,
+      dpopPayload: built.payload,
+      jweCompact: securePayload,
+      jwePlaintext: {
+        ...securePlaintext,
+        credentials: { ...securePlaintext.credentials, pass: '***' },
+      },
+      rawBody: {
+        user_identifier: input.username,
+        device_context: ctx,
+        secure_payload: securePayload,
+      },
+      rawBodyBytes: JSON.stringify(
+        {
+          user_identifier: input.username,
+          device_context: ctx,
+          secure_payload: securePayload,
+        },
+        null,
+        2,
+      ),
+    };
 
     const res = await login({
       country: input.country,
@@ -224,7 +299,7 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
       password: input.password,
       deviceContext: ctx,
       securePayload,
-      dpopLoginHeader: header,
+      dpopLoginHeader: built.wireHeader,
     });
 
     log.push(`POST /api/v1/${input.country}/public/login -> HTTP ${res.status}`);
@@ -236,9 +311,9 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
       log.push(`phantom access_token  = ${data.access_token}`);
       log.push(`phantom refresh_token = ${data.refresh_token}`);
       log.push(`expires_in            = ${data.expires_in}s`);
-      return { ok: true, data, log, httpStatus: res.status };
+      return { ok: true, data, log, httpStatus: res.status, executedRequest };
     }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
+    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status, executedRequest };
   } catch (err) {
     return { ok: false, error: errorMessage(err), data: undefined, log };
   }
@@ -266,22 +341,37 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
     // Logout now uses DpopAuthGuard (manually invoked inside the handler) + Bearer.
     // The DPoP proof must include `ath` and the wire header is the raw compact JWT
     // (NO `DPoP ` prefix — that prefix is only for DpopLoginGuard on login).
-    const { header, jkt } = await buildAuthProof(
+    const built = await buildAuthProof(
       'POST',
       `/api/v1/${session.country}/public/logout`,
       session.accessToken,
       input.proofOptions
     );
-    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt}, with ath)`);
+    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? built.jkt}, with ath)`);
     log.push(`DPoP header value = <raw jwt> (DpopAuthGuard expects raw compact JWT, no prefix)`);
     log.push(`Authorization header = "Bearer <phantomAccessToken>" (extractBearerTokenFromRequest exige scheme Bearer)`);
     log.push(`Body: { refresh_token: "<phantom-refresh-uuid>" }  (JSON plano, sin JWE, sin device_context, sin anti_replay)`);
+
+    const executedRequest: ExecutedRequest = {
+      method: 'POST',
+      url: htuForAegis(`/api/v1/${session.country}/public/logout`),
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+        DPoP: built.proofJwt,
+      },
+      dpopProofJwt: built.proofJwt,
+      dpopHeader: built.header,
+      dpopPayload: built.payload,
+      rawBody: { refresh_token: session.refreshToken },
+      rawBodyBytes: JSON.stringify({ refresh_token: session.refreshToken }, null, 2),
+    };
 
     const res = await logout({
       country: session.country,
       refreshToken: session.refreshToken,
       phantomAccessToken: session.accessToken,
-      dpopProofJwt: header,
+      dpopProofJwt: built.proofJwt,
     });
 
     log.push(`POST /api/v1/${session.country}/public/logout -> HTTP ${res.status}`);
@@ -292,9 +382,9 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
       } else {
         log.push('Sesión local preservada (logout de prueba; aegis puede responder 204 sin revocar).');
       }
-      return { ok: true, data: null, log, httpStatus: res.status };
+      return { ok: true, data: null, log, httpStatus: res.status, executedRequest };
     }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
+    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status, executedRequest };
   } catch (err) {
     return { ok: false, error: errorMessage(err), data: undefined, log };
   }
@@ -313,12 +403,25 @@ export async function actionIntrospect(input: IntrospectInput): Promise<ActionRe
     log.push(`X-Internal-API-Key injected by Vite dev proxy (server-side, from VITE_AEGIS_INTERNAL_API_KEY)`);
     log.push(`X-Caller-Service = aegis-demo-ui`);
     log.push(`POST /api/v1/internal/token/introspect (browser -> /internal/* -> proxy -> aegis-core)`);
+
+    const executedRequest: ExecutedRequest = {
+      method: 'POST',
+      url: '/internal/token/introspect  (Vite proxy → /api/v1/internal/token/introspect)',
+      headers: {
+        'X-Internal-API-Key': '<server-side, inyectado por el Vite proxy>',
+        'X-Caller-Service': 'aegis-demo-ui',
+        'Content-Type': 'application/json',
+      },
+      rawBody: { token: input.token },
+      rawBodyBytes: JSON.stringify({ token: input.token }, null, 2),
+    };
+
     const res = await introspect(input.token);
     log.push(`HTTP ${res.status}`);
     if (res.ok) {
       const data = unwrapIntrospectPayload(res.data);
       if (!data) {
-        return { ok: false, error: 'Unexpected introspect response shape', data: res.data as never, log, httpStatus: res.status };
+        return { ok: false, error: 'Unexpected introspect response shape', data: res.data as never, log, httpStatus: res.status, executedRequest };
       }
       log.push(`active=${String(data.active)}`);
       const session = getSession();
@@ -334,9 +437,9 @@ export async function actionIntrospect(input: IntrospectInput): Promise<ActionRe
       // is `active: true` (token valid) or `active: false` (token invalid / unknown).
       // We surface the semantic result via `ok` so the Security Test can assert
       // the test condition correctly.
-      return { ok: data.active === true, data, log, httpStatus: res.status };
+      return { ok: data.active === true, data, log, httpStatus: res.status, executedRequest };
     }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
+    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status, executedRequest };
   } catch (err) {
     return { ok: false, error: errorMessage(err), data: undefined, log };
   }
@@ -356,24 +459,36 @@ export async function actionGetMe(input: GetMeInput = {}): Promise<ActionResult<
     if (!session) throw new Error('No active session. Login first.');
     if (!session.accessToken) throw new Error('No phantom access token. Login first.');
 
-    const { header, jkt } = await buildAuthProof(
+    const built = await buildAuthProof(
       'GET',
       `/api/v1/users/me`,
       session.accessToken,
       input.proofOptions
     );
-    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt})`);
+    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? built.jkt})`);
     log.push(`DPoP proof includes ath = base64url(sha256(phantomAccessToken))`);
     log.push(`Authorization header = "DPoP <phantomAccessToken>" (PhantomTokenGuard requires DPoP scheme)`);
 
-    const res = await getMe({ phantomAccessToken: session.accessToken, dpopProofJwt: header });
+    const executedRequest: ExecutedRequest = {
+      method: 'GET',
+      url: htuForAegis('/api/v1/users/me'),
+      headers: {
+        Authorization: `DPoP ${session.accessToken}`,
+        DPoP: built.proofJwt,
+      },
+      dpopProofJwt: built.proofJwt,
+      dpopHeader: built.header,
+      dpopPayload: built.payload,
+    };
+
+    const res = await getMe({ phantomAccessToken: session.accessToken, dpopProofJwt: built.proofJwt });
     log.push(`GET /api/v1/users/me -> HTTP ${res.status}`);
 
     if (res.ok) {
       const env = res.data as { data?: PhantomUserMeResponse };
-      return { ok: true, data: env.data, log, httpStatus: res.status };
+      return { ok: true, data: env.data, log, httpStatus: res.status, executedRequest };
     }
-    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
+    return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status, executedRequest };
   } catch (err) {
     return { ok: false, error: errorMessage(err), data: undefined, log };
   }

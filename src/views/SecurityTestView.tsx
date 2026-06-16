@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { KeyValueTable } from '../components/KeyValueTable';
-import { JsonView } from '../components/JsonView';
+import { RequestPreview } from '../components/RequestPreview';
 import { actionIntrospect, actionLogin, type ActionResult } from '../lib/actions';
 import { htuForAegis } from '../lib/dpop';
 import { getDpopKeyPair, getDpopPublicJwk, getSession, getStoredPassword } from '../lib/session';
@@ -187,7 +186,7 @@ function ScenarioCard({ scenario, loading, passed, isExpanded, onToggleExpand, o
             onClick={onToggleExpand}
             aria-expanded={isExpanded}
           >
-            {isExpanded ? '▾ Ocultar detalles' : '▸ Ver request completo'}
+            {isExpanded ? '− Ocultar detalles' : '+ Ver request completo'}
           </button>
           <button
             type="button"
@@ -202,91 +201,21 @@ function ScenarioCard({ scenario, loading, passed, isExpanded, onToggleExpand, o
 
       {isExpanded && (
         <div className="scenario-card-body">
-          <div className="preview-section">
-            <h5 className="preview-section-title">Request</h5>
-            <KeyValueTable
-              rows={[
-                { label: 'Method', value: <code>{req.method}</code> },
-                { label: 'URL', value: <code>{req.url}</code>, mono: true },
-              ]}
-            />
-          </div>
-
-          <div className="preview-section">
-            <h5 className="preview-section-title">Headers</h5>
-            <KeyValueTable
-              rows={req.headers.map((h) => ({
-                label: h.name,
-                value: <code className="header-value">{h.value}</code>,
-                mono: true,
-              }))}
-            />
-          </div>
-
-          {req.dpopProof && (
-            <div className="preview-section">
-              <h5 className="preview-section-title">DPoP proof</h5>
-              <div className="preview-grid">
-                <div>
-                  <p className="preview-label">Header</p>
-                  <JsonView data={req.dpopProof.header} initialDepth={4} />
-                </div>
-                <div>
-                  <p className="preview-label">Payload</p>
-                  <JsonView data={req.dpopProof.payload} initialDepth={3} />
-                </div>
-                <div className="preview-full">
-                  <p className="preview-label">Wire format (compact JWT)</p>
-                  <pre className="code-block compact">{req.dpopProof.wireFormat}</pre>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {req.jweBody && (
-            <div className="preview-section">
-              <h5 className="preview-section-title">Request body (JWE envelope)</h5>
-              <div className="preview-grid">
-                <div>
-                  <p className="preview-label">Plaintext (decrypted by aegis-core)</p>
-                  <JsonView data={req.jweBody.plaintextShape} initialDepth={4} />
-                </div>
-                <div className="preview-full">
-                  <p className="preview-label">Encrypted (sent on the wire)</p>
-                  <pre className="code-block compact">{req.jweBody.encrypted}</pre>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {req.rawBody && (
-            <div className="preview-section">
-              <h5 className="preview-section-title">Request body</h5>
-              <JsonView data={req.rawBody} initialDepth={4} />
-              {req.rawBodyBytes && (
-                <pre className="code-block compact">{req.rawBodyBytes}</pre>
-              )}
-            </div>
-          )}
-
-          <div className="preview-section">
-            <h5 className="preview-section-title">What aegis-core validates</h5>
-            <ul className="validation-list">
-              {req.aegisValidates.map((v, i) => (
-                <li key={i}>{v}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="preview-section">
-            <h5 className="preview-section-title">Expected response</h5>
-            <KeyValueTable
-              rows={[
-                { label: 'HTTP', value: <code>{scenario.expectedHttp}</code> },
-                { label: 'Body', value: <code>{scenario.expectedBodyShape}</code> },
-              ]}
-            />
-          </div>
+          <RequestPreview
+            title="Request completo"
+            method={req.method}
+            url={req.url}
+            headers={req.headers}
+            dpopProof={req.dpopProof}
+            jweBody={req.jweBody}
+            rawBody={req.rawBody}
+            rawBodyBytes={req.rawBodyBytes}
+            aegisValidates={req.aegisValidates}
+            expectedHttp={scenario.expectedHttp}
+            expectedBody={scenario.expectedBodyShape}
+            casesCovered={scenario.casesCovered}
+            defaultExpanded
+          />
         </div>
       )}
     </article>

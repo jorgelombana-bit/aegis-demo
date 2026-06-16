@@ -171,7 +171,7 @@ function Collapsible({ keyName, isLast, openByDefault, bracket, length, children
         aria-label={open ? 'Collapse' : 'Expand'}
         title={`${open ? 'Collapse' : 'Expand'} ${length} ${bracket === '[]' ? 'item' : 'field'}${length === 1 ? '' : 's'}`}
       >
-        <span className="json-caret">{open ? '▾' : '▸'}</span>
+        <span className="json-caret">{open ? '−' : '+'}</span>
         <span className="json-bracket">{openChar}</span>
         {!open && (
           <span className="json-summary">

@@ -27,7 +27,7 @@ pnpm dev
 | `VITE_AEGIS_PROXY_TARGET` | `https://aegis-dev.preprodcxr.co` | No |
 | `VITE_AEGIS_PUBLIC_ORIGIN` | igual al target | No |
 | `VITE_DEFAULT_COUNTRY` | `co` | No |
-| `VITE_DEFAULT_CHANNEL_ID` | `f51bc49c-50f6-477d-873e-2408fff7746e` | No |
+| `VITE_DEFAULT_OAUTH_CLIENT_ID` | `aegis-AEGIS-DEMO-e8a6cb` | No (Create User + Login — Keycloak OAuth clientId; NO es un UUID) |
 
 ## Documentación de pruebas
 

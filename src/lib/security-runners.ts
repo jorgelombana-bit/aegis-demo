@@ -14,7 +14,7 @@ export async function actionGetMeWithToken(
     if (!keyPair) throw new Error('No DPoP keypair. Run tab 2 first.');
 
     const { jti, iat } = newAntiReplayJti();
-    const proofJwt = await buildDpopProof({
+    const built = await buildDpopProof({
       keyPair,
       htm: 'GET',
       htu: htuForAegis('/api/v1/users/me'),
@@ -26,7 +26,7 @@ export async function actionGetMeWithToken(
 
     const res: AegisCallResult<unknown> = await getMe({
       phantomAccessToken,
-      dpopProofJwt: buildDpopAuthHeader(proofJwt),
+      dpopProofJwt: buildDpopAuthHeader(built.proofJwt),
     });
     log.push(`GET /api/v1/users/me -> HTTP ${res.status}`);
 

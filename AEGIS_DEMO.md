@@ -133,7 +133,7 @@ Source: `user-http.controller.ts:104` + `user-self-service-registration.encrypte
 ```json
 {
   "user_identifier": "jorge.lombana@puntored.co",
-  "clientId": "a1b2c3d4-e5f6-4789-a012-000000000001",   // UUID; channel/client id from aegis-admin
+  "clientId": "aegis-public-client",                       // Keycloak OAuth/OIDC client id (NOT a UUID; fixed by 78d8da8)
   "userData": {
     "username": "jorge.lombana",
     "email": "jorge.lombana@puntored.co",
@@ -147,7 +147,7 @@ Source: `user-http.controller.ts:104` + `user-self-service-registration.encrypte
 **Validation rules (server side)**:
 
 - `user_identifier` must equal `credentials.user_check`.
-- `clientId` must be a UUID.
+- `clientId` is a non-empty string (no longer validated as UUID; see commit `78d8da8`). It's forwarded to aegis-admin gRPC `CreateUser` and persisted as `channelId` in the audit.
 - `userData.email` must be a valid email.
 - `anti_replay.iat` is unix seconds, `jti` is UUID v4, `iat` within last 300 s.
 - The JWE is decrypted by `JweRegistrationDecryptInterceptor` (`jwe-registration-decrypt.interceptor.ts`).
@@ -190,9 +190,9 @@ Source: `public-login-http.controller.ts:87`.
 {
   "user_identifier": "jorge.lombana",
   "credentials": {
-    "clientId": "a1b2c3d4-...",      // UUID
+    "clientId": "aegis-public-client",  // Keycloak OAuth/OIDC client id (NOT a UUID)
     "pass": "...",
-    "user_check": "jorge.lombana"    // must equal outer user_identifier
+    "user_check": "jorge.lombana"       // must equal outer user_identifier
   },
   "anti_replay": { "iat": 1700000000, "jti": "<UUID v4>" }
 }

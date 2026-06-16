@@ -12,8 +12,8 @@ import { SecurityTestView } from './views/SecurityTestView';
 import './App.css';
 
 const DEFAULT_COUNTRY = (import.meta.env.VITE_DEFAULT_COUNTRY as string | undefined) ?? 'co';
-const DEFAULT_CHANNEL_ID =
-  (import.meta.env.VITE_DEFAULT_CHANNEL_ID as string | undefined) ?? 'f51bc49c-50f6-477d-873e-2408fff7746e';
+const DEFAULT_OAUTH_CLIENT_ID =
+  (import.meta.env.VITE_DEFAULT_OAUTH_CLIENT_ID as string | undefined) ?? 'aegis-AEGIS-DEMO-e8a6cb';
 
 function App() {
   const [tab, setTab] = useState<TabKey>('createUser');
@@ -30,9 +30,9 @@ function App() {
     const common = { onResult: handleResult, onLoadingChange: setLoading, result };
     switch (tab) {
       case 'createUser':
-        return <CreateUserView defaultCountry={DEFAULT_COUNTRY} defaultChannelId={DEFAULT_CHANNEL_ID} {...common} />;
+        return <CreateUserView defaultCountry={DEFAULT_COUNTRY} defaultOauthClientId={DEFAULT_OAUTH_CLIENT_ID} {...common} />;
       case 'login':
-        return <LoginView defaultCountry={DEFAULT_COUNTRY} defaultChannelId={DEFAULT_CHANNEL_ID} {...common} />;
+        return <LoginView defaultCountry={DEFAULT_COUNTRY} defaultOauthClientId={DEFAULT_OAUTH_CLIENT_ID} {...common} />;
       case 'logout':
         return <LogoutView {...common} />;
       case 'introspect':
