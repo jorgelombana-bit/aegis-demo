@@ -129,8 +129,10 @@ function unwrapIntrospect(payload: unknown): IntrospectTokenResponse | undefined
 }
 
 export function isIntrospectInactive(result: ActionResult<IntrospectTokenResponse>): boolean {
+  // `result.ok` is now `active === true` (set by `actionIntrospect`). The introspect
+  // semantically rejected the token iff `ok` is false AND the body has `active: false`.
   const data = unwrapIntrospect(result.data);
-  return result.ok && data?.active === false;
+  return !result.ok && data?.active === false;
 }
 
 export { INVALID_PHANTOM_UUID };

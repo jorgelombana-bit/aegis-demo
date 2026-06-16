@@ -38,7 +38,7 @@ export function LoginView({ defaultCountry, defaultChannelId, onResult, onLoadin
           <input value={country} onChange={(e) => setCountry(e.target.value)} maxLength={2} required />
         </div>
         <div className="field">
-          <label>Channel clientId (UUID)</label>
+          <label>Channel (UUID)</label>
           <input value={clientId} onChange={(e) => setClientId(e.target.value)} required />
           <small className="muted">data.id del canal en aegis-admin; editable.</small>
         </div>

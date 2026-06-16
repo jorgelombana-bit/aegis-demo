@@ -245,7 +245,8 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
 }
 
 // =============================================================================
-// 3. Logout (DpopAuthGuard + Bearer Authorization + ath in DPoP proof)
+// 3. Logout (DpopAuthGuard + Bearer Authorization; raw DPoP proof with `ath`;
+//          body is a plain JSON object `{ refresh_token: "..." }` — no JWE envelope).
 // =============================================================================
 export type LogoutInput = {
   proofOptions?: BuildProofOptions;
@@ -258,43 +259,29 @@ export async function actionLogout(input: LogoutInput = {}): Promise<ActionResul
   try {
     const session = getSession();
     if (!session) throw new Error('No active session. Login first.');
-    if (!session.accessToken || !session.refreshToken || !session.username || !session.channelId) {
+    if (!session.accessToken || !session.refreshToken) {
       throw new Error('Incomplete session. Login first.');
     }
-    const ctx = fingerprintFromBrowser();
 
-    const { jti, iat } = newAntiReplayJti();
-    const securePlaintext = {
-      credentials: {
-        clientId: session.channelId,
-        pass: session.refreshToken,
-        user_check: session.username,
-      },
-      anti_replay: { iat, jti },
-    };
-    log.push(`secure_payload.pass = phantom refresh_token (UUID v4)`);
-    const securePayload = await encryptJwe(session.country, securePlaintext);
-    log.push(`secure_payload (JWE, first 40 chars) = ${securePayload.slice(0, 40)}...`);
-
+    // Logout now uses DpopAuthGuard (manually invoked inside the handler) + Bearer.
+    // The DPoP proof must include `ath` and the wire header is the raw compact JWT
+    // (NO `DPoP ` prefix — that prefix is only for DpopLoginGuard on login).
     const { header, jkt } = await buildAuthProof(
       'POST',
       `/api/v1/${session.country}/public/logout`,
       session.accessToken,
       input.proofOptions
     );
-    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt})`);
-    log.push(`DPoP proof includes ath = base64url(sha256(phantomAccessToken))`);
-    log.push(`Authorization header = "Bearer <phantomAccessToken>" (DpopAuthGuard accepts Bearer; extractBearerTokenFromRequest requires it)`);
+    log.push(`DPoP proof built (jkt=${input.proofOptions?.overrideKeyPair?.jkt ?? jkt}, with ath)`);
+    log.push(`DPoP header value = <raw jwt> (DpopAuthGuard expects raw compact JWT, no prefix)`);
+    log.push(`Authorization header = "Bearer <phantomAccessToken>" (extractBearerTokenFromRequest exige scheme Bearer)`);
+    log.push(`Body: { refresh_token: "<phantom-refresh-uuid>" }  (JSON plano, sin JWE, sin device_context, sin anti_replay)`);
 
     const res = await logout({
       country: session.country,
-      clientId: session.channelId,
-      username: session.username,
-      phantomRefreshToken: session.refreshToken,
-      deviceContext: ctx,
-      securePayload,
-      dpopProofJwt: header,
+      refreshToken: session.refreshToken,
       phantomAccessToken: session.accessToken,
+      dpopProofJwt: header,
     });
 
     log.push(`POST /api/v1/${session.country}/public/logout -> HTTP ${res.status}`);
@@ -343,7 +330,11 @@ export async function actionIntrospect(input: IntrospectInput): Promise<ActionRe
             : `Phantom↔DPoP: MISMATCH (introspect=${data.dpop_jkt}, session=${session.dpopJkt})`
         );
       }
-      return { ok: true, data, log, httpStatus: res.status };
+      // The introspect endpoint always returns HTTP 200, but the SEMANTIC outcome
+      // is `active: true` (token valid) or `active: false` (token invalid / unknown).
+      // We surface the semantic result via `ok` so the Security Test can assert
+      // the test condition correctly.
+      return { ok: data.active === true, data, log, httpStatus: res.status };
     }
     return { ok: false, error: describeError(res.data, res.status), data: res.data as never, log, httpStatus: res.status };
   } catch (err) {

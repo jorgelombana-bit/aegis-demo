@@ -214,59 +214,63 @@ the Phantom tokens.
 
 ### 3.3 `POST /api/v1/{country}/public/logout` — Phantom Token Logout
 
-Source: `public-login-http.controller.ts:237` + `public-human-logout.handler.ts`.
+Source: `public-login-http.controller.ts:237` + `public-human-logout.handler.ts` + `public-human-logout.request.dto.ts`.
 
 **Request headers**:
 
 | Name | Value |
 |---|---|
 | `Authorization` | **`Bearer <phantom-access-uuid>`** (NOT `DPoP`. Validated by `extractBearerTokenFromRequest`.) |
-| `DPoP` | `DPoP <jwt>` (validated by `DpopLoginGuard`) |
+| `DPoP` | **`<raw compact jwt>`** (NO `DPoP ` prefix; validated by `DpopAuthGuard` which is invoked manually inside the handler) |
 | `Content-Type` | `application/json` |
 
 > The `Authorization: Bearer` (not `DPoP`) is the single most common source of
 > 401s on this endpoint. The phantom access UUID is the same opaque value
 > returned by `/public/login`.
 
-**Request body** (JSON, all required):
+**Request body** — plain JSON, single field (validated by `PublicHumanLogoutRequestDto`):
 
 ```json
 {
-  "user_identifier": "jorge.lombana",
-  "device_context": { "fingerprint": "...", "ip": "...", "userAgent": "..." },
-  "secure_payload": "<compact JWE>"
+  "refresh_token": "550e8400-e29b-41d4-a716-446655440098"
 }
 ```
 
-**Decrypted JWE payload** (`PublicHumanLogoutDecryptedPayloadDto`):
+> **No JWE envelope, no `user_identifier`, no `device_context`, no `anti_replay`.**
+> Only the phantom refresh token returned by `/public/login`.
+
+**DPoP proof** must include:
 
 ```json
 {
-  "credentials": {
-    "clientId": "a1b2c3d4-...",
-    "pass": "<phantom-refresh-uuid-from-login>",
-    "user_check": "jorge.lombana"
-  },
-  "anti_replay": { "iat": 1700000000, "jti": "<UUID v4>" }
+  "htm": "POST",
+  "htu": "https://aegis-dev.preprodcxr.co/api/v1/co/public/logout",
+  "iat": 1700000000,
+  "jti": "<UUID v4>",
+  "ath": "base64url(sha256(<phantom_access_token>))"
 }
 ```
+
+The `jkt` is derived from the `jwk` in the header and validated against
+`accessSession.dpop_jkt` from Redis.
 
 **Server-side checks** (`public-human-logout.handler.ts:69-95`):
-1. `accessSession` and `refreshSession` both resolve from Redis.
-2. `channelId` matches both sessions.
-3. `sessionId` matches.
-4. `refreshSession.accessTokenHash === sha256(phantomAccessToken)`.
-5. `accessSession.dpopJkt === refreshSession.dpopJkt` (if both present).
-6. **`accessSession.dpopJkt === dpopJkt`** — the DPoP key thumbprint from the proof must match the one stored at login. This is the **Phantom ↔ DPoP link check** for logout.
-7. Revokes the upstream Keycloak refresh token and deletes the phantom sessions.
+1. `DpopAuthGuard` validates the DPoP proof (typ, alg, jwk, htm, htu, iat, jti, ath, jkt).
+2. `accessSession` and `refreshSession` both resolve from Redis.
+3. `channelId` matches both sessions.
+4. `sessionId` matches.
+5. `refreshSession.accessTokenHash === sha256(phantomAccessToken)`.
+6. `accessSession.dpopJkt === refreshSession.dpopJkt` (if both present).
+7. **`accessSession.dpopJkt === dpopJkt`** — the DPoP key thumbprint from the proof must match the one stored at login. This is the **Phantom ↔ DPoP link check** for logout.
+8. Revokes the upstream Keycloak refresh token and deletes the phantom sessions.
 
 **Responses**:
 
 | HTTP | Shape |
 |---|---|
 | 204 | empty body (`ThResponseBuilder.noContent(null)`) |
-| 400 | validation errors |
-| 401 | `{ error: "invalid_request", error_description: "Authentication request rejected" }` |
+| 400 | validation errors (e.g. `refresh_token` missing) |
+| 401 | `{ message: "DPOP authentication is required" }` or "Bearer phantom access token is required" or "Phantom session mismatch" |
 | 429 | rate limit |
 | 502 | Keycloak unavailable |
 

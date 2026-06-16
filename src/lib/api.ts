@@ -174,30 +174,30 @@ export async function login(
 
 export type LogoutRequest = {
   country: string;
-  clientId: string;
-  username: string;
-  phantomRefreshToken: string;
-  deviceContext: { fingerprint: string; ip: string; userAgent: string };
-  securePayload: string;
   /**
-   * Raw DPoP proof (no `DPoP ` prefix) for the DpopAuthGuard on logout.
+   * Phantom refresh token returned by POST /{country}/public/login.
+   * Sent as a plain string in the body — the logout endpoint no longer
+   * expects a JWE envelope, device_context, or anti_replay payload.
+   */
+  refreshToken: string;
+  phantomAccessToken: string;
+  /**
+   * Raw DPoP proof (no `DPoP ` prefix) for the DpopAuthGuard.
    * Must include `ath = base64url(sha256(phantomAccessToken))` in its claims.
+   * Use `buildDpopAuthHeader(proofJwt)` to wrap if you need the `DPoP `
+   * prefix; here the wire value is the raw compact JWT.
    */
   dpopProofJwt: string;
-  phantomAccessToken: string;
 };
 
 export async function logout(
   req: LogoutRequest,
 ): Promise<AegisCallResult<null>> {
   return call<null>("POST", `/api/v1/${req.country}/public/logout`, {
-    body: {
-      user_identifier: req.username,
-      device_context: req.deviceContext,
-      secure_payload: req.securePayload,
-    },
+    body: { refresh_token: req.refreshToken },
     extraHeaders: {
-      // DpopAuthGuard accepts Bearer or DPoP; extractBearerTokenFromRequest needs Bearer.
+      // The public-logout handler calls `extractBearerTokenFromRequest`,
+      // so the Authorization scheme MUST be `Bearer`, not `DPoP`.
       Authorization: buildPhantomAuthHeader("Bearer", req.phantomAccessToken),
       DPoP: req.dpopProofJwt,
     },

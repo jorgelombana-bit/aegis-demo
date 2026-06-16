@@ -62,8 +62,11 @@ export function LogoutView({ onResult, onLoadingChange, result }: Props) {
       </button>
       {!result && !loading && (
         <p className="muted">
-          Pipeline: <code>JWE envelope</code> + <code>Authorization: Bearer &lt;access&gt;</code> +{' '}
-          <code>DPoP proof (with ath)</code> via <code>DpopAuthGuard</code> + <code>Rate limit</code>.
+          Pipeline: <code>Authorization: Bearer &lt;access&gt;</code> + <code>DPoP proof</code>{' '}
+          (raw JWT, con <code>ath = sha256(access)</code>) via <code>DpopAuthGuard</code>{' '}
+          + <code>Rate limit</code>. Body: <code>{'{ refresh_token: "<UUID>" }'}</code> (JSON plano, sin JWE).
+          El handler compara el <code>dpop_jkt</code> del proof contra{' '}
+          <code>accessSession.dpop_jkt</code>.
         </p>
       )}
     </form>
