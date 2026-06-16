@@ -38,6 +38,11 @@ export function getDpopKeyPair(): DpopKeyPair | null {
   return state?.dpopKeyPair ?? null;
 }
 
+/** Public JWK of the current DPoP key pair (or null if no session). */
+export function getDpopPublicJwk(): Record<string, unknown> | null {
+  return state?.dpopPublicJwk ?? null;
+}
+
 export async function initSession(country: string, alg: DpopAlg): Promise<void> {
   const dpopKeyPair = await generateDpopKeyPair(alg);
   state = {

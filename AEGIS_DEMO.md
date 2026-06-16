@@ -45,9 +45,7 @@ The Vite dev server in this project proxies two path families:
 | 2. Login | `POST /api/v1/{country}/public/login` | `RateLimiterGuard` → `JweDecryptInterceptor` (no `UserCheck` validation) → `UserCheckGuard` → `AntiReplayGuard` → `DpopLoginGuard` → handler |
 | 3. Logout | `POST /api/v1/{country}/public/logout` | `RateLimiterGuard` → `JweDecryptInterceptor` → `UserCheckGuard` → `AntiReplayGuard` → `DpopLoginGuard` → handler |
 | 4. Introspect | `POST /api/v1/internal/token/introspect` | `InternalApiAuthGuard` (header `X-Internal-API-Key`) |
-| 5. /users/me | `GET /api/v1/users/me` | `PhantomTokenGuard` → `RateLimiterGuard` → `DpopAuthGuard` |
-| 6. Refresh *(added)* | `POST /api/v1/auth/refresh-token` | `PhantomTokenGuard` → `RateLimiterGuard` → `DpopAuthGuard` |
-| 7. Security Test | Re-uses the above with tampered/invalid parameters | n/a |
+| 5. Security Test | Re-uses the above endpoints with 5 one-click scenarios. Each scenario renders a **Request Preview** card showing the URL, headers, DPoP proof (header + payload), JWE body (plaintext + encrypted), validations aegis-core runs, and expected response. | n/a |
 
 The actual source files proving this:
 
@@ -55,8 +53,6 @@ The actual source files proving this:
 - `aegis/src/modules/auth/interface/https/public-login-http.controller.ts:87` — `publicHumanLogin`
 - `aegis/src/modules/auth/interface/https/public-login-http.controller.ts:237` — `publicHumanLogout`
 - `aegis/src/modules/auth/interface/https/introspect-token-http.controller.ts:39` — `introspect`
-- `aegis/src/modules/user/interface/http/user-http.controller.ts:149` — `getAuthenticatedUser`
-- `aegis/src/modules/auth/interface/https/phantom-token-refresh-http.controller.ts:37` — `refresh`
 
 ---
 
@@ -385,18 +381,21 @@ check and exposes dedicated failure scenarios.
 
 ---
 
-## 5. Validation cases (the 6 from the task + the 6 from "Modo Test")
+## 5. Validation cases (Security Test scenarios)
 
-| # | Scenario | UI path | Expected aegis response |
-|---|---|---|---|
-| 1 | Phantom + DPoP valid | `5. /users/me` button | `200`, full user data |
-| 2 | Phantom + DPoP different jkt | Security Test → "Logout con DPoP diferente" | `401` ("Phantom session mismatch") |
-| 3 | DPoP altered (htu) | Security Test → "Login con DPoP alterado" | `401 DPOP_HTU_MISMATCH` |
-| 4 | Phantom invalid | Security Test → "/users/me con Phantom inválido" | `401 PHANTOM_TOKEN_NOT_FOUND` |
-| 5 | Logout with wrong DPoP | Security Test → "Logout con DPoP diferente" | same as #2 (handler-level check) |
-| 6 | Introspect invalid token | Security Test → "Introspect con token inválido" | `200 { active: false }` |
-| 7 (extra) | Introspect expired token | Security Test → "Introspect con token expirado" | `200 { active: false }` (after Redis TTL) |
-| 8 (extra) | Refresh with valid tokens | `6. Refresh` tab | `200` with new phantom tokens, old `dpop_jkt` preserved |
+The Security Test tab renders one card per scenario. Each card shows the **full request** that will be sent (URL, method, headers, DPoP proof structure, JWE body) and the **expected response**.
+
+| # | Card | Task case | Endpoint | Expected |
+|---|---|---|---|---|
+| 1 | Login válido (Phantom + DPoP correctos) | Caso 1 (parcial) | `POST /api/v1/{country}/public/login` | 200 + phantom tokens |
+| 2 | Login con DPoP alterado (htu falsificado) | Caso 3 | `POST /api/v1/{country}/public/login` | 401 `DPOP_HTU_MISMATCH` |
+| 3 | Logout con DPoP inválido (jkt distinto) | Caso 5 | `POST /api/v1/{country}/public/logout` | 401 Phantom session mismatch |
+| 4 | Introspect con token inválido (UUID sin sesión) | Caso 6 | `POST /internal/token/introspect` | 200 `{ active: false }` |
+| 5 | Introspect con token expirado | Caso 4 (variante) | `POST /internal/token/introspect` | 200 `{ active: false }` (Redis TTL expiró) |
+
+> Caso 2 (Phantom + DPoP diferente sobre endpoint protegido) se verifica ejecutando
+> el botón 1 (login válido) y luego la pestaña 5 con un DPoP keypair fresco; la
+> respuesta debe ser 401 `DPOP_JKT_MISMATCH`. Documentado en el footer de la tab.
 
 ---
 

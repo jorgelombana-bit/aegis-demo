@@ -18,9 +18,11 @@ body {
 code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.85em; }
 
 .layout {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
+  /* No max-width — let the grid breathe across the full viewport so viewers can
+     see every DPoP header / JWE body side-by-side without truncation. */
+  width: 100%;
+  margin: 0;
+  padding: 24px 32px 64px;
 }
 
 .app-header h1 {
@@ -99,13 +101,13 @@ code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, mo
 }
 
 @media (max-width: 1180px) {
-  .tab-bar { grid-template-columns: repeat(4, 1fr); }
-}
-@media (max-width: 960px) {
   .tab-bar { grid-template-columns: repeat(3, 1fr); }
 }
-@media (max-width: 600px) {
+@media (max-width: 960px) {
   .tab-bar { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .tab-bar { grid-template-columns: 1fr; }
 }
 
 /* ============== Main panes ============== */
@@ -413,7 +415,187 @@ code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, mo
   padding-left: 20px;
 }
 
-/* ============== JSON View ============== */
+/* ============== Security Test scenario cards ============== */
+.security-test {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.security-intro {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.security-intro p { margin: 2px 0; }
+
+.security-footnote {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #4b5563;
+}
+
+.security-footnote details {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+.security-footnote summary { cursor: pointer; font-weight: 600; }
+.security-footnote ul { margin: 6px 0; padding-left: 20px; }
+.security-footnote li { margin: 2px 0; }
+.security-footnote code { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+
+.scenario-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.scenario-card:hover {
+  border-color: #c7d2fe;
+}
+
+.scenario-card.loading { opacity: 0.65; }
+
+/* ============== Card header (always visible) ============== */
+.scenario-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.scenario-card-titles {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.scenario-card-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.scenario-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.scenario-description {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.scenario-cases {
+  margin: 4px 0 0;
+}
+
+.scenario-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-self: flex-start;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+/* ============== Card body (expandable) ============== */
+.scenario-card-body {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: scenario-expand 0.18s ease-out;
+}
+
+@keyframes scenario-expand {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.preview-section {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.preview-section-title {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4f46e5;
+}
+
+.preview-label {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.preview-grid > .preview-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+  .preview-grid { grid-template-columns: 1fr; }
+}
+
+.validation-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: #374151;
+  line-height: 1.55;
+}
+
+.validation-list li { margin: 2px 0; }
+
+.header-value {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11.5px;
+}
+
+
 .json-view {
   border: 1px solid #1f2937;
   border-radius: 8px;
