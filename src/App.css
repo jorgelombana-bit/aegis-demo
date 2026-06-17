@@ -477,7 +477,17 @@ body {
   border-color: #c7d2fe;
 }
 
-.scenario-card.loading { opacity: 0.65; }
+.scenario-card.running {
+  border-color: #4f46e5;
+  border-width: 2px;
+  background: #eef2ff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.scenario-card.running .run-btn {
+  background: #4338ca;
+  color: #ffffff;
+}
 
 /* ============== Card header (always visible) ============== */
 .scenario-card-header {

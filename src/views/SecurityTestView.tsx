@@ -164,7 +164,7 @@ function ScenarioCard({ scenario, loading, passed, isExpanded, onToggleExpand, o
   const outcomeLabel = scenario.outcome === 'accept' ? 'esperado: 200 OK' : `esperado: ${scenario.expectedHttp}`;
 
   return (
-    <article className={`scenario-card ${loading ? 'loading' : ''}`}>
+    <article className={`scenario-card ${loading ? 'running' : ''}`}>
       <header className="scenario-card-header">
         <div className="scenario-card-titles">
           <div className="scenario-card-titlerow">
@@ -186,15 +186,15 @@ function ScenarioCard({ scenario, loading, passed, isExpanded, onToggleExpand, o
             onClick={onToggleExpand}
             aria-expanded={isExpanded}
           >
-            {isExpanded ? '− Ocultar detalles' : '+ Ver request completo'}
+            {isExpanded ? 'Ocultar detalles' : 'Ver request completo'}
           </button>
           <button
             type="button"
-            className="btn-primary btn-sm"
+            className="btn-primary btn-sm run-btn"
             onClick={onRun}
-            disabled={disabled || loading}
+            disabled={disabled}
           >
-            {loading ? 'Ejecutando…' : 'Ejecutar escenario'}
+            {loading ? 'Ejecutando...' : 'Ejecutar escenario'}
           </button>
         </div>
       </header>
