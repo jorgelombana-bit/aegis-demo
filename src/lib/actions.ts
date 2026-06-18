@@ -148,13 +148,13 @@ export type CreateUserInput = {
 export async function actionCreateUser(input: CreateUserInput): Promise<ActionResult<unknown>> {
   const log: ActionLog = [];
   try {
-    const ctx = fingerprintFromBrowser();
-    log.push(`device_context.fingerprint = ${ctx.fingerprint}`);
-    log.push(`device_context.userAgent   = ${ctx.userAgent.slice(0, 60)}...`);
-
     const jti = Math.floor(Date.now() / 1000);
+    // Note: `user_identifier` is NOT included inside the JWE — the server's
+    // JweRegistrationDecryptInterceptor (aegis/src/shared/crypto/interceptors/
+    // jwe-registration-decrypt.interceptor.ts:115-155) doesn't read it from
+    // the JWE, and its body rewrite at line 174-178 overwrites the body's
+    // `user_identifier` with the value from the outer envelope anyway.
     const securePlaintext = {
-      user_identifier: input.email,
       clientId: input.clientId,
       userData: { username: input.username, email: input.email, password: input.password },
       credentials: { user_check: input.email },
@@ -168,6 +168,12 @@ export async function actionCreateUser(input: CreateUserInput): Promise<ActionRe
     const securePayload = await encryptJwe(input.country, securePlaintext);
     log.push(`secure_payload (JWE, first 40 chars) = ${securePayload.slice(0, 40)}...`);
 
+    // Note: `device_context` is NOT included in the outer body. The
+    // register-self-service-user handler (aegis/src/modules/user/application/
+    // handler/register-self-service-user.handler.ts:28-69) reads sourceIp
+    // and userAgent from the Fastify request (ip + user-agent header), not
+    // from the body. The interceptor accepts `device_context` if present
+    // (jwe-registration-decrypt.interceptor.ts:73-80) but never requires it.
     const executedRequest: ExecutedRequest = {
       method: 'POST',
       url: htuForAegis(`/api/v1/${input.country}/public/user`),
@@ -181,13 +187,11 @@ export async function actionCreateUser(input: CreateUserInput): Promise<ActionRe
       },
       rawBody: {
         user_identifier: input.email,
-        device_context: ctx,
         secure_payload: securePayload,
       },
       rawBodyBytes: JSON.stringify(
         {
           user_identifier: input.email,
-          device_context: ctx,
           secure_payload: securePayload,
         },
         null,
@@ -201,7 +205,6 @@ export async function actionCreateUser(input: CreateUserInput): Promise<ActionRe
       username: input.username,
       email: input.email,
       password: input.password,
-      deviceContext: ctx,
       securePayload,
     });
 
@@ -236,8 +239,12 @@ export async function actionLogin(input: LoginInput): Promise<ActionResult<Publi
     const ctx = fingerprintFromBrowser();
 
     const { jti, iat } = newAntiReplayJti();
+    // Note: `user_identifier` is NOT included inside the JWE — the server's
+    // JweDecryptInterceptor (aegis/src/shared/crypto/interceptors/jwe-decrypt.
+    // interceptor.ts:144-152) only validates credentials + anti_replay from
+    // the JWE, and its body rewrite at line 175-179 overwrites the body's
+    // `user_identifier` with the value from the outer envelope.
     const securePlaintext = {
-      user_identifier: input.username,
       credentials: {
         clientId: input.clientId,
         pass: input.password,

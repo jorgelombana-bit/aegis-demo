@@ -256,7 +256,6 @@ function buildScenarios(args: BuildArgs): Scenario[] {
   } as const;
 
   const loginJwePlaintext = {
-    user_identifier: username,
     credentials: {
       clientId: channelId,
       pass: password ? '*'.repeat(password.length) : '<password>',
@@ -308,12 +307,13 @@ function buildScenarios(args: BuildArgs): Scenario[] {
           'RateLimiterGuard: 10 req / 60 s (10 en este prefix)',
           'JWE header: alg ∈ {RSA-OAEP-256, ECDH-ES+A256KW}, enc = A256GCM',
           'JWE decrypt: secure_payload → JSON',
-          'JWE envelope: user_identifier === credentials.user_check',
-          'JWE: credentials.clientId is UUID v4',
+          'JweDecryptInterceptor: credentials.{pass,user_check,clientId} son strings no vacíos',
+          'JweDecryptInterceptor: credentials.user_check === outer body.user_identifier',
           'AntiReplayGuard: anti_replay.iat dentro de ±5min/30s, anti_replay.jti UUID v4 no usado',
           'DpopLoginGuard: header.typ=dpop+jwt, alg ∈ {ES256, RS256, PS256}, jwk presente',
           'DpopLoginGuard: payload.htm === "POST", payload.htu === URL completa, payload.iat dentro de 5 min, jti UUID v4',
           'UserCheckGuard: user_identifier === credentials.user_check',
+          'AegisAdminUserClientMembershipService.userBelongsToClient: gRPC aegis-admin.forgotPassword({userIdentifier, clientId}) — si no pertenece lanza 401 USER_CLIENT_MISMATCH',
           'Keycloak: password grant con clientId resuelto server-side',
           'PhantomSessionService: persiste sesión AES-256-GCM en Redis',
         ],

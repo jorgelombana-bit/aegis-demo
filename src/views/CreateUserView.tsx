@@ -85,13 +85,11 @@ export function CreateUserView({ defaultCountry, defaultOauthClientId, onResult,
         url={url}
         headers={[
           { name: 'Content-Type', value: 'application/json' },
-          { name: 'X-Forwarded-For', value: '<ip del browser (Fastify infiere de la conexión)>' },
         ]}
         jweBody={{
           encrypted:
             'eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0.<cek>.<iv>.<tag>  (RSA-OAEP-256 / A256GCM, computed on click)',
           plaintextShape: {
-            user_identifier: email || '<email>',
             clientId: oauthClientId || '<Keycloak OAuth clientId>',
             userData: { username: username || '<username>', email: email || '<email>', password: '***' },
             credentials: { user_check: email || '<email>' },

@@ -105,7 +105,6 @@ export function LoginView({ defaultCountry, defaultOauthClientId, onResult, onLo
           encrypted:
             'eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0.<cek>.<iv>.<tag>  (RSA-OAEP-256 / A256GCM, computed on click)',
           plaintextShape: {
-            user_identifier: username || '<username>',
             credentials: {
               clientId: oauthClientId || '<Keycloak OAuth clientId>',
               pass: password ? '*'.repeat(password.length) : '<password>',

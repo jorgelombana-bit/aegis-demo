@@ -121,7 +121,6 @@ export type CreateUserRequest = {
   username: string;
   email: string;
   password: string;
-  deviceContext: { fingerprint: string; ip: string; userAgent: string };
   securePayload: string;
 };
 
@@ -134,7 +133,6 @@ export async function createUser(
     {
       body: {
         user_identifier: req.email,
-        device_context: req.deviceContext,
         secure_payload: req.securePayload,
       },
     },
